@@ -15,33 +15,25 @@ Deployed the live version of the app here: [here](https://url-shortener-12.verce
 - Postman Testing
   ![](assets/postmanTest.png)
 
-````
-
 ## Getting Started
 
 1. Clone the repo
 
-```bash
-
-$ git clone https://github.com/AbdussamadYisau/Url-Shortener-API
-$ cd Url-Shortener-API
-
-````
+```
+ git clone https://github.com/AbdussamadYisau/Url-Shortener-API
+ cd Url-Shortener-API
+```
 
 2. Install the dependencies:
 
-```bash
-
+```
 npm install
-
 ```
 
 3. Run the development server:
 
-```bash
-
+```
 $ node index.js
-
 ```
 
 4. Navigate to [http://localhost:8080/api/url/shortener](http://localhost:8080/api/url/shortener)

@@ -6,6 +6,8 @@ const validUrl = require("valid-url");
 const shortId = require("shortid");
 const shortid = require("shortid");
 
+require("dotenv/config");
+
 router.use(bodyParser.json());
 router.use(bodyParser.urlencoded({ extended: true }));
 
@@ -13,7 +15,9 @@ router.use(bodyParser.urlencoded({ extended: true }));
 //  @desc Create short URL
 router.post("/shorten", async (req, res) => {
   const { longUrl } = req.body;
-  const baseUrl = "https://url-shortener-12.vercel.app";
+  const baseUrl = `${
+    process.env.host || "https://url-shortener-12.vercel.app"
+  }`;
 
   if (!validUrl.isUri(baseUrl)) {
     return res.status(401).json("Invalid base URL");
