@@ -13,7 +13,7 @@ router.use(bodyParser.urlencoded({ extended: true }));
 //  @desc Create short URL
 router.post("/shorten", async (req, res) => {
   const { longUrl } = req.body;
-  const baseUrl = "https://url-shortener-eight-dusky.vercel.app";
+  const baseUrl = "https://url-shortener-12.vercel.app";
 
   if (!validUrl.isUri(baseUrl)) {
     return res.status(401).json("Invalid base URL");
