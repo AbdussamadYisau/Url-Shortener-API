@@ -3,3 +3,9 @@ node_modules
 
 
 .vercel
+
+# Generated React frontend
+public/app.js
+public/app.js.LEGAL.txt
+public/index.html
+public/style.css

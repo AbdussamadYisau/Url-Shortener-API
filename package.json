@@ -7,7 +7,14 @@
     "start": "node index.js",
     "dev": "node --watch index.js",
     "test": "node --test",
-    "start:demo": "STORAGE=memory node index.js"
+    "start:demo": "STORAGE=memory node index.js",
+    "build": "node scripts/build.mjs",
+    "dev:frontend": "node scripts/build.mjs --watch",
+    "prestart": "npm run build",
+    "predev": "npm run build",
+    "prestart:demo": "npm run build",
+    "pretest": "npm run build",
+    "vercel-build": "npm run build"
   },
   "author": "Abdussamad Yisau",
   "license": "ISC",
@@ -16,9 +23,16 @@
     "express": "^5.3.0",
     "express-rate-limit": "^8.7.1",
     "helmet": "^8.3.0",
-    "mongoose": "^9.11.4"
+    "mongoose": "^9.11.4",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1"
   },
   "engines": {
     "node": ">=22.0.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/cli": "^4.3.3",
+    "esbuild": "^0.28.2",
+    "tailwindcss": "^4.3.3"
   }
 }

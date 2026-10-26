@@ -1,6 +1,6 @@
 # Shortly · URL Shortener
 
-An Express 5 + MongoDB URL shortener with a responsive, accessible web frontend. Updated for 2026 with Node.js 22+, Mongoose 9, cryptographic short codes, HTTP(S) validation, security headers, request limits, and integration tests.
+An Express 5 + MongoDB URL shortener with a responsive React web frontend. Updated for 2026 with Node.js 22+, Mongoose 9, cryptographic short codes, HTTP(S) validation, security headers, request limits, and integration tests.
 
 ## Run locally
 
@@ -19,7 +19,9 @@ For persistent links, remove `STORAGE=memory` and set `DB_CONNECTION` to your Mo
 - Shorten links, open the result, and copy to clipboard (clipboard requires localhost or HTTPS).
 - Recent links saved on this browser, with individual copy actions and clear history.
 - Responsive layout, keyboard focus states, live status and error messages.
-- Frontend and API share an origin; no separate frontend build is required.
+- React components manage shortening, clipboard feedback, and recent history. Midnight is the sole theme.
+- Frontend source lives in `frontend/`; `npm run build` compiles Tailwind CSS and bundles React with esbuild into `public/`. Frontend and API share an origin.
+- `npm run dev` builds the frontend and watches the backend. Run `npm run dev:frontend` in a second terminal to rebuild React on edits. Startup and tests also build automatically.
 
 ## API
 
@@ -48,7 +50,7 @@ Legacy `host` is supported as a fallback for `BASE_URL`. Short URL origins come 
 
 ## Vercel
 
-Import the repository as a Node.js project. `vercel.json` routes requests through the exported handler and includes the frontend assets. Add MongoDB Atlas through the Vercel Marketplace, or use an existing cluster. Configure `DB_CONNECTION` (or the integration’s `MONGODB_URI`), `BASE_URL`, `NODE_ENV=production`, and `TRUST_PROXY=1`; leave `STORAGE` unset. MongoDB must accept connections from the deployment. Database connections are reused within warm function instances. The Vercel path is prepared but needs verification with your deployment and database credentials.
+Import the repository as a Node.js project. Set the Vercel Build Command to `npm run build`. `vercel.json` routes requests through the exported handler and includes the frontend assets. Add MongoDB Atlas through the Vercel Marketplace, or use an existing cluster. Configure `DB_CONNECTION` (or the integration’s `MONGODB_URI`), `BASE_URL`, `NODE_ENV=production`, and `TRUST_PROXY=1`; leave `STORAGE` unset. MongoDB must accept connections from the deployment. Database connections are reused within warm function instances. The Vercel path is prepared but needs verification with your deployment and database credentials.
 
 ## Verification
 

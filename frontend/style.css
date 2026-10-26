@@ -1,0 +1,22 @@
+@import "tailwindcss";
+@source "./*.jsx";
+@theme {
+  --color-ink: #eef2ff;
+  --color-muted: #9ba5b9;
+  --color-accent: #a89aff;
+  --color-line: #303a4d;
+  --font-sans: Arial, Helvetica, sans-serif;
+}
+@layer base {
+  :root { color-scheme: dark; }
+  body { @apply m-0 bg-[#10141d] font-sans text-ink antialiased; }
+  h1 { @apply my-[23px] text-[54px] min-[751px]:text-[clamp(45px,5.3vw,66px)] leading-[1.05] tracking-[-3.5px] font-medium; }
+  h1 span { @apply font-[Georgia,serif] italic text-accent; }
+  h2 { @apply my-[0.83em] text-[23px] tracking-[-0.7px] font-medium; }
+  h3 { @apply mt-[15px] mb-2 text-[13px] font-medium; }
+  p { @apply my-[1em]; }
+  label { @apply mb-[9px] block text-[11px] font-semibold; }
+  input { @apply min-w-0 flex-auto min-[751px]:flex-1 w-[calc(100%-45px)] border-0 bg-transparent py-3 text-[13px] text-ink outline-none; }
+  button { @apply cursor-pointer hover:brightness-95 disabled:opacity-60 disabled:cursor-wait; }
+  a:focus-visible, button:focus-visible { @apply outline-2 outline-offset-4 outline-accent; }
+}

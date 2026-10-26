@@ -10,7 +10,7 @@ test('frontend, API validation, duplicate URLs, redirects and errors', async t =
   t.after(() => new Promise(resolve => server.close(resolve)));
   const origin = `http://127.0.0.1:${server.address().port}`;
   const post = body => fetch(`${origin}/api/url/shorten`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-  const home = await fetch(origin); assert.equal(home.status, 200); assert.match(await home.text(), /shorten-form/);
+  const home = await fetch(origin); assert.equal(home.status, 200); assert.match(await home.text(), /id="root"/);
   assert.equal((await fetch(`${origin}/style.css`)).status, 200);
   assert.equal((await (await fetch(`${origin}/api/health`)).json()).storage, 'temporary');
   for (const longUrl of ['javascript:alert(1)', 'ftp://example.com', 'https://user:password@example.com', 'bad', null, { bad: true }]) assert.equal((await post({ longUrl })).status, 400);
