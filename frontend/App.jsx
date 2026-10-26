@@ -2,13 +2,9 @@ import { useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import Layout from './Layout';
 
-const historyKey = 'shortly.links.v1';
 const paths = { arrow: 'M7 17 17 7M7 7h10v10', copy: 'M9 9h11v11H9zM15 9V4H4v11h5', check: 'm5 12 4 4L19 6' };
 function Icon({name = 'arrow'}) { return <svg className="icon inline-block size-[1.15em] shrink-0 align-[-0.18em]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false"><path d={paths[name]}/></svg>; }
 function safeUrl(value) { try { return ['https:', 'http:'].includes(new URL(value).protocol); } catch { return false; } }
-function readHistory() {
-  try { const saved = JSON.parse(localStorage.getItem(historyKey) || '[]'); return Array.isArray(saved) ? saved.filter(row => row && safeUrl(row.shortUrl) && safeUrl(row.longUrl)).slice(0,20) : []; } catch { return []; }
-}
 function CopyButton({url, setNotice}) {
   const [copied, setCopied] = useState(false);
   const timer = useRef();
@@ -19,7 +15,7 @@ function CopyButton({url, setNotice}) {
   }
   return <button className="inline-flex items-center justify-center gap-2.5 whitespace-nowrap rounded-md border border-[#49516b] bg-[#242c3f] px-3.5 py-2.5 text-[11px] text-[#c3b9ff]" type="button" aria-label={copied ? 'Copied' : `Copy ${url}`} onClick={copy}>{copied ? 'Copied' : 'Copy link'} <Icon name={copied ? 'check' : 'copy'}/></button>;
 }
-function Shortener({onCreated, setNotice, notice}) {
+function Shortener({onCreated, setNotice, notice, onUnauthorized}) {
   const [longUrl, setLongUrl] = useState('');
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState(null);
@@ -35,6 +31,7 @@ function Shortener({onCreated, setNotice, notice}) {
     try {
       const response = await fetch('/api/url/shorten', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({longUrl:longUrl.trim()}), signal:AbortSignal.timeout(15000)});
       const row = await response.json();
+      if (response.status === 401) onUnauthorized();
       if (!response.ok) throw new Error(row.error || 'Unable to shorten this link. Please try again.');
       if (!safeUrl(row.shortUrl) || !safeUrl(row.longUrl)) throw new Error('The server returned an invalid link.');
       setResult(row); setNotice({text:'Your link is ready to share.'}); onCreated(row);
@@ -49,17 +46,71 @@ function Shortener({onCreated, setNotice, notice}) {
     {temporary && <p id="storage-note" className="mt-[11px] text-[11px] text-[#b9ae83]">Local preview mode · Links are temporary and disappear when the server restarts.</p>}
   </section>;
 }
-function RecentLinks({links,onClear,setNotice}) {
-  return <section className="my-[35px] min-[751px]:my-[45px] [&_.eyebrow]:text-[8px] [&_.eyebrow]:text-[#a8b3c7]" aria-labelledby="recent-title"><div className="flex items-center justify-between"><div><p className="flex items-center gap-2 text-[10px] font-bold tracking-[1.8px] [&>span]:size-1.5 [&>span]:rounded-full [&>span]:bg-accent">YOUR LITTLE COLLECTION</p><h2 id="recent-title">Recent links<span id="count" className="ml-2.5 rounded-full bg-[#29273d] px-2 py-[5px] align-middle text-[10px] text-[#c3b9ff]">{links.length}</span></h2></div>{links.length > 0 && <button id="clear" className="border-0 bg-transparent text-[11px] text-muted underline" type="button" onClick={onClear}>Clear history</button>}</div>
-    <div id="history">{links.map(row => { const date = new Date(row.date); return <div className="flex items-center gap-2.5 min-[751px]:gap-[15px] border-b border-line py-5" key={row.shortUrl}><span className="hidden min-[751px]:inline-flex items-center justify-center rounded-[9px] bg-[#29273d] px-[13px] py-2.5 text-[#c3b9ff]"><Icon/></span><div className="min-w-0 flex-1 [&>a]:text-[13px] [&>a]:font-semibold [&>a]:text-accent [&>a]:no-underline [&>a]:wrap-anywhere [&>p]:mt-[7px] [&>p]:truncate [&>p]:text-[11px] [&>p]:text-muted"><a href={row.shortUrl} target="_blank" rel="noopener noreferrer">{row.shortUrl.replace(/^https?:\/\//,'')}</a><p title={row.longUrl}>{row.longUrl}</p></div><span className="hidden min-[751px]:block text-[10px] text-muted">{Number.isNaN(date.getTime()) ? '' : date.toLocaleDateString(undefined,{month:'short',day:'numeric'})}</span><CopyButton url={row.shortUrl} setNotice={setNotice}/></div>; })}</div>
-    {links.length === 0 && <div id="empty" className="mt-[5px] rounded-xl border border-dashed border-line px-[15px] py-[35px] text-center [&>span]:inline-flex [&>span]:items-center [&>span]:justify-center [&>span]:rounded-xl [&>span]:bg-[#29273d] [&>span]:px-[13px] [&>span]:py-2 [&>span]:text-2xl [&>span]:text-[#c3b9ff] [&>p]:text-[10px] [&>p]:text-[#8a9082]"><span><Icon/></span><h3>A fresh start for your links.</h3><p>Your shortened links will appear here, saved on this browser.</p></div>}
-    <p className="mt-[15px] text-[10px] text-[#8a9082]">Your history stays in this browser. Clearing it doesn’t delete your short links.</p></section>;
+function RecentLinks({links,setNotice,retentionDays}) {
+  return <section className="my-[35px] min-[751px]:my-[45px] [&_.eyebrow]:text-[8px] [&_.eyebrow]:text-[#a8b3c7]" aria-labelledby="recent-title"><div className="flex items-center justify-between"><div><p className="flex items-center gap-2 text-[10px] font-bold tracking-[1.8px] [&>span]:size-1.5 [&>span]:rounded-full [&>span]:bg-accent">YOUR LITTLE COLLECTION</p><h2 id="recent-title">Recent links<span id="count" className="ml-2.5 rounded-full bg-[#29273d] px-2 py-[5px] align-middle text-[10px] text-[#c3b9ff]">{links.length}</span></h2></div></div>
+    <div id="history">{links.map(row => { const date = new Date(row.date); return <div className="flex items-center gap-2.5 min-[751px]:gap-[15px] border-b border-line py-5" key={row.shortUrl}><span className="hidden min-[751px]:inline-flex items-center justify-center rounded-[9px] bg-[#29273d] px-[13px] py-2.5 text-[#c3b9ff]"><Icon/></span><div className="min-w-0 flex-1 [&>a]:text-[13px] [&>a]:font-semibold [&>a]:text-accent [&>a]:no-underline [&>a]:wrap-anywhere [&>p]:mt-[7px] [&>p]:truncate [&>p]:text-[11px] [&>p]:text-muted"><a href={row.shortUrl} target="_blank" rel="noopener noreferrer">{row.shortUrl.replace(/^https?:\/\//,'')}</a><p title={row.longUrl}>{row.longUrl}</p>{row.expiresAt && <p>Expires {new Date(row.expiresAt).toLocaleDateString()}</p>}</div><span className="hidden min-[751px]:block text-[10px] text-muted">{Number.isNaN(date.getTime()) ? '' : date.toLocaleDateString(undefined,{month:'short',day:'numeric'})}</span><CopyButton url={row.shortUrl} setNotice={setNotice}/></div>; })}</div>
+    {links.length === 0 && <div id="empty" className="mt-[5px] rounded-xl border border-dashed border-line px-[15px] py-[35px] text-center [&>span]:inline-flex [&>span]:items-center [&>span]:justify-center [&>span]:rounded-xl [&>span]:bg-[#29273d] [&>span]:px-[13px] [&>span]:py-2 [&>span]:text-2xl [&>span]:text-[#c3b9ff] [&>p]:text-[10px] [&>p]:text-[#8a9082]"><span><Icon/></span><h3>A fresh start for your links.</h3><p>Your shortened links will appear here, visible only to your account.</p></div>}
+    <p className="mt-[15px] text-[10px] text-[#8a9082]">Your history is private to your Google account. Anyone with a short link can open it. {retentionDays > 0 ? `Links expire ${retentionDays} days after creation.` : 'Links do not expire automatically.'}</p></section>;
+}
+function AccountGate({enabled}) {
+  return <section className="rounded-2xl border border-line bg-[#191f2d] p-8 text-center">
+    <h2>Your links. Your space.</h2><p className="text-sm text-muted">Sign in with Google to shorten links and access your private history on any device.</p>
+    {enabled ? <a href="/api/auth/google" className="mt-3 inline-flex items-center gap-3 rounded-md bg-accent px-6 py-3 text-sm font-semibold text-[#141324]"><svg viewBox="0 0 24 24" className="size-5" aria-hidden="true"><path fill="currentColor" d="M21.6 12.2c0-.7-.1-1.4-.2-2.1H12v4h5.4a4.7 4.7 0 0 1-2 3.1 6.2 6.2 0 1 1 0-10.2l3-2.9A10.5 10.5 0 1 0 12 22.5c6.1 0 9.6-4.3 9.6-10.3Z"/></svg>Continue with Google</a> : <p className="text-sm text-[#b9ae83]">Google sign-in is being configured. Please check back shortly.</p>}
+  </section>;
 }
 function App() {
-  const [links,setLinks] = useState(readHistory);
-  const [notice,setNotice] = useState({text:'Paste a link. Make it short. Pass it on.'});
-  function persist(next) { setLinks(next); try { localStorage.setItem(historyKey,JSON.stringify(next)); } catch { setNotice({text:'Browser storage is unavailable, so history will not persist.'}); } }
-  function onCreated(row) { persist([row,...links.filter(item => item.urlCode !== row.urlCode)].slice(0,20)); }
-  return <Layout><Shortener onCreated={onCreated} setNotice={setNotice} notice={notice}/><RecentLinks links={links} onClear={() => persist([])} setNotice={setNotice}/></Layout>;
+  const [account,setAccount] = useState(null);
+  const [links,setLinks] = useState([]);
+  const [loading,setLoading] = useState(true);
+  const [loadError,setLoadError] = useState('');
+  const [signingOut,setSigningOut] = useState(false);
+  const [notice,setNotice] = useState({text: new URLSearchParams(location.search).has('auth') ? 'Google sign-in did not complete. Please try again.' : 'Paste a link. Make it short. Pass it on.'});
+  const generation = useRef(0);
+  async function refresh() {
+    const current = ++generation.current;
+    setLoading(true); setLoadError(''); setLinks([]);
+    try {
+      const response = await fetch('/api/auth/me');
+      if (!response.ok) throw new Error('Unable to check your account. Please retry.');
+      const data = await response.json();
+      if (current !== generation.current) return;
+      setAccount(data);
+      if (data.user) {
+        const result = await fetch('/api/links');
+        if (result.status === 401) {setAccount({...data,user:null});return;}
+        if (!result.ok) throw new Error('Unable to load your links. Please retry.');
+        const history = await result.json();
+        if (current === generation.current) setLinks(history.links.filter(row => safeUrl(row.shortUrl) && safeUrl(row.longUrl)));
+      }
+    } catch(error) { if(current === generation.current) setLoadError(error.message); }
+    finally { if(current === generation.current) setLoading(false); }
+  }
+  useEffect(() => {
+    // Discard anonymous browser history rather than assigning it to any account.
+    try { localStorage.removeItem('shortly.links.v1'); localStorage.removeItem('shortly.style'); } catch {}
+    refresh();
+    const onFocus = () => refresh();
+    const onPageShow = event => {if (event.persisted) refresh();};
+    window.addEventListener('focus',onFocus);
+    window.addEventListener('pageshow',onPageShow);
+    return () => {generation.current++;window.removeEventListener('focus',onFocus);window.removeEventListener('pageshow',onPageShow);};
+  },[]);
+  async function logout() {
+    setSigningOut(true);
+    try {
+      const response = await fetch('/api/auth/logout',{method:'POST'});
+      if (!response.ok) throw new Error('Unable to sign out. Please try again.');
+      generation.current++;setLinks([]);setAccount({...account,user:null});setNotice({text:'You have signed out.'});
+    } catch(error) {setNotice({text:error.message,error:true});}
+    finally {setSigningOut(false);}
+  }
+  function onCreated(row) {setLinks(previous => [row,...previous.filter(item => item.urlCode !== row.urlCode)].slice(0,100));}
+  return <Layout>
+    {loading ? <p role="status" className="text-muted">Loading your account…</p> : loadError ? <div role="alert" className="rounded-xl border border-line p-6"><p>{loadError}</p><button onClick={refresh} className="text-accent underline">Retry</button></div> : account?.user ? <>
+      <div className="mb-5 flex flex-wrap items-center justify-between gap-3 text-xs text-muted"><span>Signed in as {account.user.email}</span><button onClick={logout} disabled={signingOut} className="text-accent underline">{signingOut ? 'Signing out…' : 'Sign out'}</button></div>
+      <Shortener key={account.user.id} onCreated={onCreated} setNotice={setNotice} notice={notice} onUnauthorized={() => {setLinks([]);setAccount({...account,user:null});}}/>
+      <RecentLinks links={links} setNotice={setNotice} retentionDays={account.retentionDays}/>
+    </> : <><AccountGate enabled={account?.googleEnabled}/><p role="status" className="text-sm text-muted">{notice.text}</p></>}
+  </Layout>;
 }
 createRoot(document.getElementById('root')).render(<App/>);

@@ -17,5 +17,11 @@
       "dest": "/index.js"
     }
   ],
-  "buildCommand": "npm run build"
+  "buildCommand": "npm run build",
+  "crons": [
+    {
+      "path": "/api/cron/cleanup",
+      "schedule": "0 3 * * *"
+    }
+  ]
 }

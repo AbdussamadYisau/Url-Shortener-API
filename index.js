@@ -2,6 +2,12 @@ require('dotenv').config({ quiet: true });
 const mongoose = require('mongoose');
 const { createApp } = require('./app');
 const { createStore } = require('./lib/store');
+const { googleProvider } = require('./lib/auth');
+const retentionDays = Number(process.env.LINK_RETENTION_DAYS || 0);
+const sessionDays = Number(process.env.SESSION_MAX_AGE_DAYS || 7);
+if (!Number.isInteger(sessionDays) || sessionDays < 1 || sessionDays > 90) throw new Error('SESSION_MAX_AGE_DAYS must be between 1 and 90.');
+const baseUrl = (process.env.BASE_URL || process.env.host || `http://localhost:${process.env.PORT || 8080}`).replace(/\/$/,'');
+const google = process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET ? googleProvider({clientId:process.env.GOOGLE_CLIENT_ID,clientSecret:process.env.GOOGLE_CLIENT_SECRET,baseUrl}) : null;
 const memory = process.env.STORAGE === 'memory';
 const port = process.env.PORT || 8080;
 let connection;
@@ -15,7 +21,7 @@ async function ready() {
   connection ||= mongoose.connect(uri, { serverSelectionTimeoutMS: 10000 }).catch(error => { connection = null; throw error; });
   await connection;
 }
-const app = createApp({ store: createStore({ memory }), memory, baseUrl: process.env.BASE_URL || process.env.host || `http://localhost:${port}`, trustProxy: process.env.TRUST_PROXY === '1' ? 1 : false });
+const app = createApp({ store: createStore({ memory,retentionDays }), memory, google,retentionDays,sessionDays, baseUrl, trustProxy: process.env.TRUST_PROXY === '1' ? 1 : false });
 const handler = async (req, res) => {
   try { await ready(); app(req, res); }
   catch (error) { console.error(error.message); res.statusCode = 503; res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify({ error: 'Storage unavailable. Please try again later.' })); }
