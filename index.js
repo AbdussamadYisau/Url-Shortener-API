@@ -1,52 +1,27 @@
-const express = require("express");
-const bodyParser = require("body-parser");
-const app = express();
-const mongoose = require("mongoose");
-// const cors = require("cors");
-require("dotenv/config");
-
-// For CORs
-
-// app.use(cors());
-
-app.use((req, res, next) => {
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader(
-    "Access-Control-Allow-Methods",
-    "GET, POST, PUT, PATCH, DELETE"
-  );
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
-  next();
-});
-
-// Middlewares
-app.use(bodyParser.json()); // application/json
-app.use(bodyParser.urlencoded({ extended: true }));
-
-// Define Routes
-app.use("/", require("./routes/index"));
-app.use("/api/url", require("./routes/url"));
-
-// Conect to Database
-
-const connectDB = async () => {
-  try {
-    await mongoose.connect(process.env.DB_CONNECTION, {
-      useNewUrlParser: true,
-      useUnifiedTopology: true,
-    });
-    console.log("MongoDB Connected.");
-  } catch (err) {
-    console.log(err.message);
-    process.exit(1);
+require('dotenv').config({ quiet: true });
+const mongoose = require('mongoose');
+const { createApp } = require('./app');
+const { createStore } = require('./lib/store');
+const memory = process.env.STORAGE === 'memory';
+const port = process.env.PORT || 8080;
+let connection;
+async function ready() {
+  if (memory) {
+    if (process.env.NODE_ENV === 'production') throw new Error('Production requires MongoDB storage.');
+    return;
   }
+  const uri = process.env.DB_CONNECTION || process.env.MONGODB_URI;
+  if (!uri) throw new Error('Set DB_CONNECTION or use STORAGE=memory for local development.');
+  connection ||= mongoose.connect(uri, { serverSelectionTimeoutMS: 10000 }).catch(error => { connection = null; throw error; });
+  await connection;
+}
+const app = createApp({ store: createStore({ memory }), memory, baseUrl: process.env.BASE_URL || process.env.host || `http://localhost:${port}`, trustProxy: process.env.TRUST_PROXY === '1' ? 1 : false });
+const handler = async (req, res) => {
+  try { await ready(); app(req, res); }
+  catch (error) { console.error(error.message); res.statusCode = 503; res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify({ error: 'Storage unavailable. Please try again later.' })); }
 };
-
-connectDB();
-
-// Listening port
-app.listen(process.env.PORT || 8080, () => {
-  console.log(
-    `This application is running on port ${process.env.PORT || 8080} `
-  );
-});
+module.exports = handler;
+if (require.main === module) ready().then(() => {
+  if (memory) console.warn('Temporary storage: links disappear when the server restarts.');
+  app.listen(port, () => console.log(`URL Shortener ready at http://localhost:${port}`));
+}).catch(error => { console.error(error.message); process.exitCode = 1; });

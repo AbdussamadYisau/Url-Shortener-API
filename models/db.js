@@ -1,14 +1,9 @@
 const mongoose = require('mongoose');
-
-
-const shortenerSchema = new mongoose.Schema({
-    urlCode: String,
-    longUrl: String,
-    shortUrl: String,
-    date: {type: String, default: Date.now()}
+const schema = new mongoose.Schema({
+  urlCode: { type: String, required: true, unique: true },
+  longUrl: { type: String, required: true, index: true },
+  shortUrl: { type: String, required: true },
+  date: { type: String, default: () => new Date().toISOString() },
 });
-
-
-
-
-module.exports = mongoose.model('Database', shortenerSchema);
+// Preserve the original collection and existing links.
+module.exports = mongoose.model('Database', schema);
