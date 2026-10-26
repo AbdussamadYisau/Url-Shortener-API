@@ -1,5 +1,6 @@
 const {test} = require('node:test');
 const assert = require('node:assert/strict');
+const http = require('node:http');
 const {createApp} = require('../app');
 const {createStore} = require('../lib/store');
 const {createAuthStore} = require('../lib/auth');
@@ -13,11 +14,23 @@ async function setup(t, options = {}) {
     async start() {return {url:'https://accounts.google.com/o/oauth2/v2/auth',verifier:'verifier',nonce:'nonce'};},
     async finish(code,pending) {assert.equal(pending.verifier,'verifier');if(code === 'bad') throw new Error('bad token');return {id:code,email:`${code}@example.com`,name:code};},
   };
-  const app = createApp({store,authStore,google,memory:true,baseUrl,retentionDays,cronSecret:'test-cron-secret',...options});
+  const app = createApp({store,authStore,google,memory:true,trustProxy:1,baseUrl,retentionDays,cronSecret:'test-cron-secret',...options});
   const server = app.listen(0,'127.0.0.1');await new Promise(resolve => server.once('listening',resolve));
   t.after(()=>new Promise(resolve=>server.close(resolve)));
   const origin = `http://127.0.0.1:${server.address().port}`;
-  const request = (path,opts={}) => fetch(`${origin}${path}`,{redirect:'manual',...opts});
+  // node:http preserves explicit Host headers for canonical-domain regression tests.
+  const request = (path,opts={}) => new Promise((resolve,reject) => {
+    const req = http.request(`${origin}${path}`,{method:opts.method || 'GET',headers:{host:'short.example','x-forwarded-proto':'https',...opts.headers}},res => {
+      const chunks = [];
+      res.on('data',chunk => chunks.push(chunk));
+      res.on('end',() => {
+        const headers = new Headers();
+        for(let i=0;i<res.rawHeaders.length;i+=2) headers.append(res.rawHeaders[i],res.rawHeaders[i+1]);
+        resolve(new Response(Buffer.concat(chunks),{status:res.statusCode,headers}));
+      });
+    });
+    req.on('error',reject);req.end(opts.body);
+  });
   async function login(id) {
     const start = await request('/api/auth/google');
     const state = new URL(start.headers.get('location')).searchParams.get('state');
@@ -92,4 +105,22 @@ test('unconfigured Google sign-in fails closed',async t=>{
   const {request} = await setup(t,{google:null});
   assert.equal((await request('/api/auth/google')).status,503);
   assert.equal((await (await request('/api/auth/me')).json()).googleEnabled,false);
+});
+
+test('OAuth starts on the configured origin before setting state cookies',async t=>{
+  const {request} = await setup(t);
+  for (const headers of [
+    {host:'old.vercel.app'},
+    {host:'attacker.example','x-forwarded-host':'short.example'},
+    {host:'short.example','x-forwarded-proto':'http'},
+    {host:'short.example:8080'},
+  ]) {
+    const response = await request('/api/auth/google?next=https://attacker.example',{headers});
+    assert.equal(response.status,302);
+    assert.equal(response.headers.get('location'),'https://short.example/api/auth/google');
+    assert.equal(response.headers.get('set-cookie'),null);
+  }
+  const response = await request('/api/auth/google');
+  assert.equal(new URL(response.headers.get('location')).hostname,'accounts.google.com');
+  assert.ok(response.headers.get('set-cookie').startsWith('__Host-shortly_oauth='));
 });

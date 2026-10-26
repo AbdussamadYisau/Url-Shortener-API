@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from 'react';
-import { createRoot } from 'react-dom/client';
 import Layout from './Layout';
 
 const paths = { arrow: 'M7 17 17 7M7 7h10v10', copy: 'M9 9h11v11H9zM15 9V4H4v11h5', check: 'm5 12 4 4L19 6' };
@@ -58,7 +57,7 @@ function AccountGate({enabled}) {
     {enabled ? <a href="/api/auth/google" className="mt-3 inline-flex items-center gap-3 rounded-md bg-accent px-6 py-3 text-sm font-semibold text-[#141324]"><svg viewBox="0 0 24 24" className="size-5" aria-hidden="true"><path fill="currentColor" d="M21.6 12.2c0-.7-.1-1.4-.2-2.1H12v4h5.4a4.7 4.7 0 0 1-2 3.1 6.2 6.2 0 1 1 0-10.2l3-2.9A10.5 10.5 0 1 0 12 22.5c6.1 0 9.6-4.3 9.6-10.3Z"/></svg>Continue with Google</a> : <p className="text-sm text-[#b9ae83]">Google sign-in is being configured. Please check back shortly.</p>}
   </section>;
 }
-function App() {
+export default function App() {
   const [account,setAccount] = useState(null);
   const [links,setLinks] = useState([]);
   const [loading,setLoading] = useState(true);
@@ -66,18 +65,29 @@ function App() {
   const [signingOut,setSigningOut] = useState(false);
   const [notice,setNotice] = useState({text: new URLSearchParams(location.search).has('auth') ? 'Google sign-in did not complete. Please try again.' : 'Paste a link. Make it short. Pass it on.'});
   const generation = useRef(0);
+  const accountRef = useRef(null);
+  function applyAccount(next) {
+    if (accountRef.current?.user?.id !== next?.user?.id) {
+      setLinks([]);
+      setNotice({text:'Paste a link. Make it short. Pass it on.'});
+    }
+    accountRef.current = next;
+    setAccount(next);
+  }
   async function refresh() {
     const current = ++generation.current;
-    setLoading(true); setLoadError(''); setLinks([]);
+    // Keep the mounted form and its draft/result during background refreshes.
+    setLoadError('');
     try {
       const response = await fetch('/api/auth/me');
       if (!response.ok) throw new Error('Unable to check your account. Please retry.');
       const data = await response.json();
       if (current !== generation.current) return;
-      setAccount(data);
+      applyAccount(data);
       if (data.user) {
         const result = await fetch('/api/links');
-        if (result.status === 401) {setAccount({...data,user:null});return;}
+        if (current !== generation.current) return;
+        if (result.status === 401) {applyAccount({...data,user:null});return;}
         if (!result.ok) throw new Error('Unable to load your links. Please retry.');
         const history = await result.json();
         if (current === generation.current) setLinks(history.links.filter(row => safeUrl(row.shortUrl) && safeUrl(row.longUrl)));
@@ -100,17 +110,24 @@ function App() {
     try {
       const response = await fetch('/api/auth/logout',{method:'POST'});
       if (!response.ok) throw new Error('Unable to sign out. Please try again.');
-      generation.current++;setLinks([]);setAccount({...account,user:null});setNotice({text:'You have signed out.'});
+      generation.current++;applyAccount({...accountRef.current,user:null});setLoading(false);setNotice({text:'You have signed out.'});
     } catch(error) {setNotice({text:error.message,error:true});}
     finally {setSigningOut(false);}
   }
-  function onCreated(row) {setLinks(previous => [row,...previous.filter(item => item.urlCode !== row.urlCode)].slice(0,100));}
+  function onCreated(row) {
+    if (accountRef.current?.user?.id !== account?.user?.id) return;
+    setLinks(previous => [row,...previous.filter(item => item.urlCode !== row.urlCode)].slice(0,100));
+  }
+  function onUnauthorized() {
+    if (accountRef.current?.user?.id !== account?.user?.id) return;
+    generation.current++;applyAccount({...accountRef.current,user:null});
+  }
   return <Layout>
-    {loading ? <p role="status" className="text-muted">Loading your account…</p> : loadError ? <div role="alert" className="rounded-xl border border-line p-6"><p>{loadError}</p><button onClick={refresh} className="text-accent underline">Retry</button></div> : account?.user ? <>
+    {loadError && <div role="alert" className="mb-5 rounded-xl border border-line p-6"><p>{loadError}</p><button onClick={refresh} className="text-accent underline">Retry</button></div>}
+    {loading ? <p role="status" className="text-muted">Loading your account…</p> : account?.user ? <>
       <div className="mb-5 flex flex-wrap items-center justify-between gap-3 text-xs text-muted"><span>Signed in as {account.user.email}</span><button onClick={logout} disabled={signingOut} className="text-accent underline">{signingOut ? 'Signing out…' : 'Sign out'}</button></div>
-      <Shortener key={account.user.id} onCreated={onCreated} setNotice={setNotice} notice={notice} onUnauthorized={() => {setLinks([]);setAccount({...account,user:null});}}/>
+      <Shortener key={account.user.id} onCreated={onCreated} setNotice={setNotice} notice={notice} onUnauthorized={onUnauthorized}/>
       <RecentLinks links={links} setNotice={setNotice} retentionDays={account.retentionDays}/>
     </> : <><AccountGate enabled={account?.googleEnabled}/><p role="status" className="text-sm text-muted">{notice.text}</p></>}
   </Layout>;
 }
-createRoot(document.getElementById('root')).render(<App/>);

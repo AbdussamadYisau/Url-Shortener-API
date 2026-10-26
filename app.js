@@ -40,6 +40,11 @@ function createApp({ store, baseUrl = 'http://localhost:8080', memory = false, t
   };
   app.get('/api/auth/me', async (req,res) => res.json({user:await authStore.get(cookie(req,sessionName),'session'),googleEnabled:!!google,retentionDays}));
   app.get('/api/auth/google', rateLimit({windowMs:60000,limit:15}), async (req,res) => {
+    // Start OAuth on the same origin that receives the callback cookie.
+    const canonical = new URL(baseUrl);
+    if (req.get('host')?.toLowerCase() !== canonical.host || req.protocol !== canonical.protocol.slice(0,-1)) {
+      return res.redirect(302, `${baseUrl}/api/auth/google`);
+    }
     if (!google) return res.status(503).json({error:'Google sign-in is not configured yet.'});
     const pending = await google.start('');
     const token = await authStore.put('oauth',{verifier:pending.verifier,nonce:pending.nonce},600000);
