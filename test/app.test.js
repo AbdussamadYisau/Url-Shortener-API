@@ -87,13 +87,13 @@ test('expiry prevents redirects and cleanup deletes expired records',async t=>{
   assert.equal((await request(`/${row.urlCode}`)).status,404);
   assert.equal((await request('/api/cron/cleanup')).status,401);
   const response = await request('/api/cron/cleanup',{headers:{authorization:'Bearer test-cron-secret'}});
-  assert.deepEqual(await response.json(),{deleted:1});assert.equal(await store.find(row.urlCode),null);
+  assert.deepEqual(await response.json(),{deleted:1,batches:1,complete:true,disabled:false});assert.equal(await store.find(row.urlCode),null);
   const fresh = await (await post(alice,'https://example.com')).json();assert.notEqual(row.urlCode,fresh.urlCode);
 });
 test('disabled retention preserves links, sessions expire, configuration is validated',async t=>{
   const {request,post,login,advance,store} = await setup(t);
   const session = await login('alice');const row = await (await post(session,'https://example.com')).json();assert.equal(row.expiresAt,null);
-  advance(8*86400000);assert.equal((await request('/api/links',{headers:{cookie:session}})).status,401);assert.equal((await request(`/${row.urlCode}`)).status,302);assert.equal(await store.cleanup(),0);
+  advance(8*86400000);assert.equal((await request('/api/links',{headers:{cookie:session}})).status,401);assert.equal((await request(`/${row.urlCode}`)).status,302);assert.equal((await store.cleanup()).deleted,0);
   for(const retentionDays of [-1,NaN,1.5,36501]) assert.throws(()=>createStore({memory:true,retentionDays}));
 });
 test('creation is rate limited for signed-in users',async t=>{
@@ -123,4 +123,16 @@ test('OAuth starts on the configured origin before setting state cookies',async 
   const response = await request('/api/auth/google');
   assert.equal(new URL(response.headers.get('location')).hostname,'accounts.google.com');
   assert.ok(response.headers.get('set-cookie').startsWith('__Host-shortly_oauth='));
+});
+
+test('homepage exposes social metadata and a public PNG without JavaScript or sign-in',async t=>{
+  const {request} = await setup(t);
+  const home = await request('/');const html = await home.text();
+  assert.match(html,/<meta property="og:image" content="https:\/\/url-shortener\.abdussamadyisau\.xyz\/og-image\.png">/);
+  assert.match(html,/<meta name="twitter:card" content="summary_large_image">/);
+  const image = await request('/og-image.png');assert.equal(image.status,200);
+  assert.match(image.headers.get('content-type'),/image\/png/);
+  const bytes = Buffer.from(await image.arrayBuffer());
+  assert.equal(bytes.subarray(1,4).toString(),'PNG');
+  assert.equal(bytes.readUInt32BE(16),1200);assert.equal(bytes.readUInt32BE(20),630);
 });

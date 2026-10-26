@@ -48,7 +48,16 @@ Set these server-side environment variables, then redeploy:
 
 Leave `STORAGE` unset in production. Legacy `DB_CONNECTION` takes precedence over `MONGODB_URI`.
 
-**Retention applies to existing links too.** Expired links return 404; daily cron (03:00 UTC) and create/list requests delete expired records permanently. Changing retention cannot recover deleted links. Malformed legacy dates are preserved for manual inspection.
+**Retention applies to existing links too.** Expired links return 404; daily cron (03:00 UTC) deletes expired records in batches of 500, with at most 20 batches and a 5-second processing budget per run. Ordinary requests only filter expired links; they never trigger deletion. A cleanup response with `complete: false` means work may remain for the next run. Changing retention cannot recover deleted links. Malformed legacy dates are preserved for manual inspection.
+
+Before deploying this update, backfill legacy creation dates against your Atlas database (using the same `MONGODB_URI`). The migration is idempotent and does not delete links:
+
+```sh
+npm run migrate:created-at             # inspect counts without changing data
+npm run migrate:created-at -- --apply  # backfill valid dates and ensure the index
+```
+
+Invalid dates are counted and left untouched. Until migrated, legacy links are checked individually for expiry on reads but excluded from scheduled deletion. Cleanup counts and failures appear in Vercel logs.
 
 ## API & checks
 
@@ -67,6 +76,7 @@ POST requests require a matching `Origin`; authenticated routes use session cook
 ```sh
 npm test
 npm audit
+npm run test:mongodb # isolated real MongoDB; downloads a test binary on first run
 ```
 
-Tests use memory storage and a mock Google provider. Verify real Google login, MongoDB, and cron after deployment.
+Unit tests use memory storage and a mock Google provider. The MongoDB integration suite checks expiry, bounded cleanup, and migration against an isolated database. Verify real Google login and cron after deployment.

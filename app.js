@@ -70,7 +70,9 @@ function createApp({ store, baseUrl = 'http://localhost:8080', memory = false, t
   app.get('/api/links',requireUser,async (req,res) => res.json({links:await store.list(req.user.id,baseUrl.replace(/\/$/,''))}));
   app.get('/api/cron/cleanup', async (req,res) => {
     if (!cronSecret || req.get('authorization') !== `Bearer ${cronSecret}`) return res.status(401).json({error:'Unauthorized'});
-    res.json({deleted:await store.cleanup()});
+    const report = await store.cleanup();
+    console.info(JSON.stringify({event:'link_cleanup',...report}));
+    res.json(report);
   });
   app.get('/api/health' , (req, res) => res.json({ status: 'ok', storage: memory ? 'temporary' : 'mongodb' }));
   app.post('/api/url/shorten', requireUser, rateLimit({ windowMs: 60000, limit: 30, standardHeaders: 'draft-8', legacyHeaders: false, message: { error: 'Too many links. Please try again in a minute.' } }), async (req, res) => {
