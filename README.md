@@ -2,6 +2,12 @@
 
 An Express 5 + MongoDB URL shortener with a responsive React web frontend. Updated for 2026 with Node.js 22+, Mongoose 9, cryptographic short codes, HTTP(S) validation, security headers, request limits, and integration tests.
 
+## How it works
+
+![How Shortly works: sign in with Google, create and share short links, keep account history private, and expire old links using LINK_RETENTION_DAYS.](assets/how-it-works.svg)
+
+Sign in with Google, paste a URL, and share your short link. Your account history is private; anyone with a shared short link can open its destination. Set `LINK_RETENTION_DAYS` to expire links after a chosen number of days (`0` disables expiry).
+
 ## Run locally
 
 ```sh
